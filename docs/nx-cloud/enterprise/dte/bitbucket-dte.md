@@ -49,3 +49,19 @@ The agent jobs set up the repo and then wait for Nx Cloud to assign them tasks.
 {% callout type="warning" title="Two Types of Parallelization" %}
 The agents and the `--parallel` flag both parallelize tasks, but in different ways. The way this workflow is written, there will be 3 agents running tasks and each agent will try to run 2 tasks at once. If a particular CI run only has 2 tasks, only one agent will be used.
 {% /callout %}
+
+## Rerunning jobs with DTE
+
+Re-running only failed jobs results in agent jobs not running, which causes the CI pipeline to hang and eventually timeout. This is a common pitfall when using a CI providers "re-run failed jobs", or equivalent, feature since agent jobs will always complete successfully.
+
+To enforce re-running all jobs, you can set up your CI pipeline to exit early with a helpful error.
+For example:
+
+> You re-ran only failed jobs, but CI requires re-running all jobs.
+> Re-run all jobs in the pipeline to prevent this error.
+
+At a high level:
+
+1. Create a job that always succeeds and uploads an artifact on the pipeline with the run-attempt number of the pipeline.
+2. The main and agent jobs can read the artifact file when starting and assert they are on the same re-try attempt.
+3. If the re-attempt number does not match, then error with a message stating to re-run all jobs. Otherwise, the pipelines are on the same re-run and can proceed as normally
