@@ -515,21 +515,64 @@ export function belongsToDifferentEntryPoint(
   return importEntryPoint !== srcEntryPoint;
 }
 
+/**
+ * Resolves wildcard patterns in implicitDependencies to actual project names
+ * @param implicitDependencies Array of dependency patterns (may contain wildcards)
+ * @param projectGraph The Nx project graph
+ * @returns Array of resolved project names
+ */
+export function resolveWildcardDependencies(
+  implicitDependencies: string[],
+  projectGraph: ProjectGraph
+): string[] {
+  if (!implicitDependencies || !Array.isArray(implicitDependencies)) {
+    return [];
+  }
+
+  return implicitDependencies.flatMap((pattern) => {
+    if (pattern.includes('*')) {
+      // Convert glob pattern to regex
+      const regexPattern = pattern
+        .replace(/\./g, '\\.') // Escape dots
+        .replace(/\*/g, '.*'); // Convert * to .*
+      const regex = new RegExp(`^${regexPattern}$`);
+
+      // Find all projects that match the pattern
+      return Object.keys(projectGraph.nodes).filter((projectName) =>
+        regex.test(projectName)
+      );
+    }
+    return [pattern];
+  });
+}
+
 export function getSecondaryEntryPointPath(
   importExpr: string,
   filePath: string,
   projectRoot: string
 ): string | undefined {
-  const resolvedImportFile = resolveModuleByImport(
-    importExpr,
-    filePath, // not strictly necessary, but speeds up resolution
-    path.join(workspaceRoot, getRootTsConfigFileName())
-  );
-  if (!resolvedImportFile) {
+  const rootTsConfigFileName = getRootTsConfigFileName();
+
+  // Graceful handling when tsconfig.base.json is missing
+  if (!rootTsConfigFileName) {
     return undefined;
   }
-  const entryPoint = getEntryPoint(resolvedImportFile, projectRoot);
-  return entryPoint;
+
+  try {
+    const resolvedImportFile = resolveModuleByImport(
+      importExpr,
+      filePath,
+      path.join(workspaceRoot, rootTsConfigFileName)
+    );
+    if (!resolvedImportFile) {
+      return undefined;
+    }
+    const entryPoint = getEntryPoint(resolvedImportFile, projectRoot);
+    return entryPoint;
+  } catch (error) {
+    // Graceful error handling for path resolution issues
+    return undefined;
+  }
 }
 
 function getEntryPoint(file: string, projectRoot: string): string {
